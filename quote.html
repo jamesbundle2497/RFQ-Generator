@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote Pricing</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
+        <h1 class="text-3xl font-bold mb-6 text-center">Quote Pricing</h1>
+        <div id="quote-content" class="overflow-x-auto"></div>
+        <button id="submit-prices" class="mt-6 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300">Submit Prices</button>
+    </div>
+
+    <script>
+        async function loadQuote() {
+            const quoteId = window.location.pathname.split('/').pop();
+            try {
+                const response = await fetch(`/api/quote/${quoteId}`);
+                const data = await response.json();
+                displayQuote(data);
+            } catch (error) {
+                console.error('Error loading quote:', error);
+                document.getElementById('quote-content').innerHTML = 'Error loading quote. Please try again.';
+            }
+        }
+
+        function displayQuote(data) {
+            let tableHtml = '<table class="w-full border-collapse border border-gray-300 mb-4"><tr class="bg-gray-200"><th class="border p-2">Item</th><th class="border p-2">Quantity</th><th class="border p-2">Your Price</th></tr>';
+            data.forEach((item, index) => {
+                tableHtml += `<tr>
+                    <td class="border p-2">${item.item}</td>
+                    <td class="border p-2">${item.quantity}</td>
+                    <td class="border p-2"><input type="number" class="w-full" data-index="${index}" placeholder="Enter your price"></td>
+                </tr>`;
+            });
+            tableHtml += '</table>';
+            document.getElementById('quote-content').innerHTML = tableHtml;
+        }
+
+        document.getElementById('submit-prices').addEventListener('click', function() {
+            const prices = [];
+            const rows = document.querySelectorAll('#quote-content table tr:not(:first-child)');
+            rows.forEach(row => {
+                const price = row.querySelector('input[type="number"]').value;
+                prices.push(price);
+            });
+            console.log('Submitted prices:', prices);
+            // Here you would typically send these prices back to your server
+            alert('Prices submitted successfully!');
+        });
+
+        loadQuote();
+    </script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bundle AI RFQ Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
+        <h1 class="text-3xl font-bold mb-6 text-center">Bundle AI RFQ Generator</h1>
+        <form id="upload-form" class="mb-6">
+            <div class="flex items-center justify-center">
+                <label for="pdf-file" class="cursor-pointer bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300">
+                    Choose File
+                    <input type="file" id="pdf-file" accept=".pdf" required class="hidden">
+                </label>
+                <span id="file-name" class="ml-4 text-gray-600"></span>
+                <button type="submit" class="ml-4 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300">Generate RFQ</button>
+            </div>
+        </form>
+        <div id="result" class="overflow-x-auto"></div>
+        <button id="generate-link" class="mt-6 bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600 transition duration-300 hidden">Generate Shareable Link</button>
+        <div id="link-container" class="mt-4 hidden">
+            <input type="text" id="shareable-link" class="w-full p-2 border rounded" readonly>
+            <button id="copy-link" class="mt-2 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300">Copy Link</button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('pdf', document.getElementById('pdf-file').files[0]);
+
+            try {
+                const response = await fetch('/api/parse-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                displayResult(data);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = 'Error parsing PDF';
+            }
+        });
+
+        function displayResult(data) {
+            if (data.error) {
+                document.getElementById('result').innerHTML = `<p class="text-red-500">Error: ${data.error}</p><pre>${data.rawContent}</pre>`;
+                return;
+            }
+            
+            let tableHtml = '<table class="w-full border-collapse border border-gray-300 mb-4"><tr class="bg-gray-200"><th class="border p-2">Item</th><th class="border p-2">Quantity</th><th class="border p-2">Cost</th></tr>';
+            data.forEach((item, index) => {
+                tableHtml += `<tr>
+                    <td class="border p-2"><input type="text" value="${item.item}" class="w-full" data-index="${index}" data-field="item"></td>
+                    <td class="border p-2"><input type="number" value="${item.quantity}" class="w-full" data-index="${index}" data-field="quantity"></td>
+                    <td class="border p-2"><input type="number" value="${item.cost}" class="w-full" data-index="${index}" data-field="cost"></td>
+                </tr>`;
+            });
+            tableHtml += '</table>';
+            document.getElementById('result').innerHTML = tableHtml;
+            document.getElementById('generate-link').classList.remove('hidden');
+        }
+
+        document.getElementById('pdf-file').addEventListener('change', function(e) {
+            document.getElementById('file-name').textContent = e.target.files[0].name;
+        });
+
+        document.getElementById('generate-link').addEventListener('click', async function() {
+            const tableData = [];
+            const rows = document.querySelectorAll('#result table tr:not(:first-child)');
+            rows.forEach(row => {
+                const item = row.querySelector('[data-field="item"]').value;
+                const quantity = row.querySelector('[data-field="quantity"]').value;
+                tableData.push({ item, quantity });
+            });
+            try {
+                const response = await fetch('/api/create-quote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ items: tableData }),
+                });
+                const { quoteId } = await response.json();
+                const link = `${window.location.origin}/quote/${quoteId}`;
+                document.getElementById('shareable-link').value = link;
+                document.getElementById('link-container').classList.remove('hidden');
+                await copyToClipboard(link);
+                alert('Shareable link generated and copied to clipboard!\n\nYou can send this link to distributors for pricing.');
+            } catch (error) {
+                console.error('Error generating link:', error);
+                alert('An error occurred while generating the link. Please try again.');
+            }
+        });
+
+        document.getElementById('copy-link').addEventListener('click', async function() {
+            const link = document.getElementById('shareable-link').value;
+            await copyToClipboard(link);
+            alert('Link copied to clipboard!');
+        });
+
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                console.log('Text copied to clipboard');
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+
+        document.getElementById('result').addEventListener('input', function(e) {
+            if (e.target.tagName === 'INPUT') {
+                // You can add logic here to update the data when inputs change
+                console.log(`Updated: ${e.target.dataset.field} at index ${e.target.dataset.index} to ${e.target.value}`);
+            }
+        });
+    </script>
+</body>
+</html>
